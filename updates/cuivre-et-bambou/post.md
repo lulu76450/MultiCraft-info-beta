@@ -1,7 +1,7 @@
 ---
 date: 2026-06-23
 title: MAJ du mod cuivre et du bambou
-images: [1.png, 2.jpg]
+images: [1.png, 2.jpg, 3.png]
 ---
 
 Mise à jour du mod cuivre !
