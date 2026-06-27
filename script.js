@@ -56,12 +56,13 @@
     'Content-Type': 'application/json',
   };
 
-  /* ── Discord OAuth2 (PKCE, sans backend) ── */
+  /* ── Discord OAuth2 (Authorization Code via Worker proxy) ── */
   // 👉 Remplacez par le Client ID de votre application Discord
   //    discord.com/developers/applications → votre app → OAuth2
-  const DISCORD_CLIENT_ID = '1520060964920103013';
-  // URL de redirection : doit correspondre exactement à celle configurée dans Discord
-  const DISCORD_REDIRECT_URI = window.location.origin + window.location.pathname;
+  const DISCORD_CLIENT_ID = 'VOTRE_CLIENT_ID_ICI';
+  // ⚠️  Doit correspondre EXACTEMENT à ce qui est enregistré dans Discord Developer Portal
+  //     Discord → OAuth2 → Redirects
+  const DISCORD_REDIRECT_URI = 'https://multicraft-info.netlify.app/';
   const DISCORD_SCOPES = 'identify';
 
   /* ── État de l'utilisateur Discord ── */
@@ -160,16 +161,22 @@
     const usernameEl = document.getElementById('discord-username');
 
     if (discordUser) {
-      if (loginBtn) loginBtn.hidden = true;
-      if (userInfo) userInfo.hidden = false;
+      if (loginBtn) loginBtn.style.display = 'none';
+      if (userInfo) {
+        userInfo.removeAttribute('hidden');
+        userInfo.style.display = 'flex';
+      }
       if (avatarEl) {
         avatarEl.src = getDiscordAvatarUrl(discordUser);
         avatarEl.alt = getDiscordDisplayName(discordUser);
       }
       if (usernameEl) usernameEl.textContent = getDiscordDisplayName(discordUser);
     } else {
-      if (loginBtn) loginBtn.hidden = false;
-      if (userInfo) userInfo.hidden = true;
+      if (loginBtn) loginBtn.style.display = '';
+      if (userInfo) {
+        userInfo.setAttribute('hidden', '');
+        userInfo.style.display = 'none';
+      }
     }
   }
 
@@ -225,19 +232,18 @@
     }
     updateDiscordUI();
 
-    const loginBtn = document.getElementById('discord-login-btn');
-    if (loginBtn) {
-      loginBtn.addEventListener('click', startDiscordLogin);
-    }
-
-    const logoutBtn = document.getElementById('discord-logout-btn');
-    if (logoutBtn) {
-      logoutBtn.addEventListener('click', function () {
+    // Délégation sur le document pour capturer les clics
+    // même si les boutons sont cachés au moment de l'init
+    document.addEventListener('click', function (e) {
+      if (e.target.closest('#discord-login-btn')) {
+        startDiscordLogin();
+      }
+      if (e.target.closest('#discord-logout-btn')) {
         discordUser = null;
         clearDiscordSession();
         updateDiscordUI();
-      });
-    }
+      }
+    });
 
     // Gérer le callback OAuth si on revient de Discord
     handleDiscordCallback();
@@ -1067,7 +1073,14 @@
       '<div class="reviews-divider"></div>'
       + '<div class="reviews-header">'
       + '<h3 class="reviews-title">⭐ Avis de la communauté</h3>'
+      + '<div class="reviews-header-right">'
       + '<span class="reviews-avg-wrap"><span class="reviews-no-badge">Chargement…</span></span>'
+      + '<select class="reviews-sort-select" id="reviews-sort-select" aria-label="Trier les avis">'
+      + '<option value="recent">Plus récents</option>'
+      + '<option value="desc">Note ↓</option>'
+      + '<option value="asc">Note ↑</option>'
+      + '</select>'
+      + '</div>'
       + '</div>'
       + '<div class="reviews-list" id="reviews-list-inner">'
       + '<div class="reviews-spinner"><div class="spinner"></div></div>'
@@ -1141,18 +1154,43 @@
 
     // Charger les avis
     fetchReviews(serverId)
-      .then(function (reviews) { refreshReviewsList(reviews, section); })
+      .then(function (reviews) {
+        refreshReviewsList(reviews, section);
+
+        // Bind le sélecteur de tri
+        const sortSelect = section.querySelector('#reviews-sort-select');
+        if (sortSelect) {
+          sortSelect.addEventListener('change', function () {
+            refreshReviewsList(reviews, section);
+          });
+        }
+      })
       .catch(function () {
         const list = document.getElementById('reviews-list-inner');
         if (list) list.innerHTML = '<p class="reviews-empty">Impossible de charger les avis.</p>';
       });
   }
 
+  function sortReviews(reviews, mode) {
+    const sorted = reviews.slice();
+    if (mode === 'desc') {
+      sorted.sort(function (a, b) { return b.rating - a.rating; });
+    } else if (mode === 'asc') {
+      sorted.sort(function (a, b) { return a.rating - b.rating; });
+    }
+    // 'recent' → ordre Supabase (created_at desc), déjà trié
+    return sorted;
+  }
+
   function refreshReviewsList(reviews, section) {
+    const sortSelect = section.querySelector('#reviews-sort-select');
+    const mode = sortSelect ? sortSelect.value : 'recent';
+    const sorted = sortReviews(reviews, mode);
+
     const list = document.getElementById('reviews-list-inner');
-    if (list) list.innerHTML = buildReviewCardsHtml(reviews);
+    if (list) list.innerHTML = buildReviewCardsHtml(sorted);
     const avgWrap = section.querySelector('.reviews-avg-wrap');
-    if (avgWrap) avgWrap.innerHTML = buildAvgHtml(reviews);
+    if (avgWrap) avgWrap.innerHTML = buildAvgHtml(reviews); // avg toujours sur tous les avis
   }
 
   /* ── Pop-up "Rejoindre" ── */

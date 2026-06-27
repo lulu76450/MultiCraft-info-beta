@@ -1771,6 +1771,31 @@ body.modal-open {
   flex-wrap: wrap;
 }
 
+.reviews-header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.reviews-sort-select {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-family: var(--font);
+  font-size: 0.78rem;
+  padding: 0.2rem 0.5rem;
+  cursor: pointer;
+  outline: none;
+  transition: border-color var(--transition);
+}
+
+.reviews-sort-select:hover,
+.reviews-sort-select:focus {
+  border-color: var(--border-strong);
+}
+
 .reviews-title {
   font-size: 1rem;
   font-weight: 600;
