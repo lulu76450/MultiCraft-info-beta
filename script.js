@@ -59,7 +59,7 @@
   /* ── Discord OAuth2 (PKCE, sans backend) ── */
   // 👉 Remplacez par le Client ID de votre application Discord
   //    discord.com/developers/applications → votre app → OAuth2
-  const DISCORD_CLIENT_ID = 'VOTRE_CLIENT_ID_ICI';
+  const DISCORD_CLIENT_ID = '1520060964920103013';
   // URL de redirection : doit correspondre exactement à celle configurée dans Discord
   const DISCORD_REDIRECT_URI = window.location.origin + window.location.pathname;
   const DISCORD_SCOPES = 'identify';
