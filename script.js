@@ -44,6 +44,18 @@
     }
   ];
 
+  /* ── Supabase (avis serveurs) ── */
+  // 👉 Remplacez ces deux valeurs par celles de votre projet Supabase
+  //    Supabase > Settings > API
+  const SUPABASE_URL = 'https://qxzvnxekjggjldezprec.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF4enZueGVramdnamxkZXpwcmVjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyMzE3NjMsImV4cCI6MjA5NzgwNzc2M30.Qa-lxT8mYy2kejt2kiydOvDqCYNeAD6q1d1Ce56A5Rc';
+
+  const SUPABASE_HEADERS = {
+    'apikey': SUPABASE_ANON_KEY,
+    'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+    'Content-Type': 'application/json',
+  };
+
   /* ── Navigation SPA ── */
   const pages = {
     accueil: document.getElementById('page-accueil'),
@@ -696,6 +708,228 @@
     });
   }
 
+  /* ══════════════════════════════════════════════════════
+     Système d'avis — Supabase
+     ══════════════════════════════════════════════════════ */
+
+  /* ── Anti doublon côté client (localStorage léger) ── */
+  function hasRecentlyReviewed(serverId) {
+    try {
+      const data = JSON.parse(localStorage.getItem('mc_reviewed') || '{}');
+      const last = data[serverId];
+      return last && (Date.now() - last) < 3_600_000; // 1 h
+    } catch { return false; }
+  }
+
+  function markReviewed(serverId) {
+    try {
+      const data = JSON.parse(localStorage.getItem('mc_reviewed') || '{}');
+      data[serverId] = Date.now();
+      localStorage.setItem('mc_reviewed', JSON.stringify(data));
+    } catch { /* ignore */ }
+  }
+
+  /* ── Fetch des avis depuis Supabase ── */
+  async function fetchReviews(serverId) {
+    const url = SUPABASE_URL + '/rest/v1/reviews'
+      + '?server_id=eq.' + encodeURIComponent(serverId)
+      + '&order=created_at.desc&limit=50';
+
+    const res = await fetch(url, { headers: SUPABASE_HEADERS });
+    if (!res.ok) throw new Error('Erreur chargement avis (' + res.status + ')');
+    return res.json(); // tableau d'avis
+  }
+
+  /* ── Envoi d'un avis vers Supabase ── */
+  async function submitReview(serverId, pseudo, rating, text) {
+    const res = await fetch(SUPABASE_URL + '/rest/v1/reviews', {
+      method: 'POST',
+      headers: { ...SUPABASE_HEADERS, 'Prefer': 'return=minimal' },
+      body: JSON.stringify({
+        server_id: serverId,
+        pseudo: (pseudo || 'Anonyme').slice(0, 32).trim() || 'Anonyme',
+        rating: rating,
+        text: (text || '').slice(0, 280).trim(),
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Erreur soumission');
+    }
+  }
+
+  /* ── Helpers d'affichage ── */
+  function buildStarsHtml(rating, total) {
+    total = total || 5;
+    let html = '';
+    for (let i = 1; i <= total; i++) {
+      html += '<span class="review-star' + (i <= rating ? ' filled' : '') + '">★</span>';
+    }
+    return html;
+  }
+
+  function buildAvgHtml(reviews) {
+    if (!reviews.length) return '<span class="reviews-no-badge">Aucun avis</span>';
+    const avg = (reviews.reduce(function (s, r) { return s + r.rating; }, 0) / reviews.length).toFixed(1);
+    return '<span class="reviews-avg-badge">★ ' + avg
+      + ' <span class="reviews-count">(' + reviews.length + ' avis)</span></span>';
+  }
+
+  function buildReviewCardsHtml(reviews) {
+    if (!reviews.length) {
+      return '<p class="reviews-empty">Aucun avis pour l\'instant. Soyez le premier !</p>';
+    }
+    return reviews.map(function (r) {
+      return '<div class="review-card">'
+        + '<div class="review-header">'
+        + '<span class="review-stars">' + buildStarsHtml(r.rating) + '</span>'
+        + '<span class="review-pseudo">' + escapeHtml(r.pseudo || 'Anonyme') + '</span>'
+        + '<span class="review-date">' + escapeHtml(r.date || new Date(r.created_at).toLocaleDateString('fr-FR')) + '</span>'
+        + '</div>'
+        + (r.text ? '<p class="review-text">' + escapeHtml(r.text) + '</p>' : '')
+        + '</div>';
+    }).join('');
+  }
+
+  /* ── Bind le sélecteur d'étoiles interactif ── */
+  function bindStarPicker(picker) {
+    if (!picker) return;
+    const stars = picker.querySelectorAll('.star-pick');
+
+    function refresh(selected, hovered) {
+      stars.forEach(function (s) {
+        const v = parseInt(s.dataset.val);
+        s.classList.toggle('active', hovered ? v <= hovered : v <= selected);
+      });
+    }
+
+    stars.forEach(function (star) {
+      star.addEventListener('mouseenter', function () {
+        refresh(parseInt(picker.dataset.selected || 0), parseInt(star.dataset.val));
+      });
+      star.addEventListener('mouseleave', function () {
+        refresh(parseInt(picker.dataset.selected || 0), 0);
+      });
+      star.addEventListener('click', function () {
+        picker.dataset.selected = star.dataset.val;
+        refresh(parseInt(star.dataset.val), 0);
+      });
+    });
+  }
+
+  /* ── Rendu complet de la section avis ── */
+  function renderReviewsSection(serverId) {
+    const section = document.getElementById('modal-reviews-section');
+    if (!section) return;
+
+    const alreadyReviewed = hasRecentlyReviewed(serverId);
+
+    // Structure initiale avec spinner dans la liste
+    section.innerHTML =
+      '<div class="reviews-divider"></div>'
+      + '<div class="reviews-header">'
+      + '<h3 class="reviews-title">⭐ Avis de la communauté</h3>'
+      + '<span class="reviews-avg-wrap"><span class="reviews-no-badge">Chargement…</span></span>'
+      + '</div>'
+      + '<div class="reviews-list" id="reviews-list-inner">'
+      + '<div class="reviews-spinner"><div class="spinner"></div></div>'
+      + '</div>'
+      + '<div class="review-form" id="review-form-wrap">'
+      + '<p class="review-form-title">Laisser un avis</p>'
+      + (alreadyReviewed
+        ? '<p class="review-already-done">✓ Vous avez déjà soumis un avis pour ce serveur récemment.</p>'
+        : '<div class="review-form-fields">'
+        + '<div class="review-form-row">'
+        + '<input type="text" class="review-input review-pseudo-input" placeholder="Votre pseudo (optionnel)" maxlength="32">'
+        + '<div class="review-star-picker" data-selected="0">'
+        + '<span class="review-star-picker-label">Note :</span>'
+        + '<span class="star-pick" data-val="1">★</span>'
+        + '<span class="star-pick" data-val="2">★</span>'
+        + '<span class="star-pick" data-val="3">★</span>'
+        + '<span class="star-pick" data-val="4">★</span>'
+        + '<span class="star-pick" data-val="5">★</span>'
+        + '</div>'
+        + '</div>'
+        + '<textarea class="review-input review-text-input" placeholder="Votre commentaire (optionnel)" maxlength="280" rows="2"></textarea>'
+        + '<div class="review-form-footer">'
+        + '<span class="review-char-count" id="review-char-count">0 / 280</span>'
+        + '<button type="button" class="btn btn-primary review-submit-btn">Publier</button>'
+        + '</div>'
+        + '</div>')
+      + '</div>';
+
+    // Bind picker étoiles
+    bindStarPicker(section.querySelector('.review-star-picker'));
+
+    // Compteur de caractères
+    const textarea = section.querySelector('.review-text-input');
+    const charCount = section.querySelector('#review-char-count');
+    if (textarea && charCount) {
+      textarea.addEventListener('input', function () {
+        charCount.textContent = textarea.value.length + ' / 280';
+      });
+    }
+
+    // Bind soumission
+    const submitBtn = section.querySelector('.review-submit-btn');
+    const picker = section.querySelector('.review-star-picker');
+    if (submitBtn) {
+      submitBtn.addEventListener('click', function () {
+        const rating = picker ? parseInt(picker.dataset.selected || 0) : 0;
+        if (!rating) {
+          if (picker) {
+            picker.classList.add('shake');
+            setTimeout(function () { picker.classList.remove('shake'); }, 450);
+          }
+          return;
+        }
+
+        const pseudo = (section.querySelector('.review-pseudo-input').value || '').trim();
+        const text = textarea ? textarea.value.trim() : '';
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = '…';
+
+        submitReview(serverId, pseudo, rating, text)
+          .then(function () {
+            markReviewed(serverId);
+            // Remplacer le form par un message de confirmation
+            const form = document.getElementById('review-form-wrap');
+            if (form) {
+              form.innerHTML = '<p class="review-success-msg">✓ Avis publié — merci !</p>';
+            }
+            // Recharger la liste des avis
+            return fetchReviews(serverId);
+          })
+          .then(function (reviews) {
+            refreshReviewsList(reviews, section);
+          })
+          .catch(function (err) {
+            console.error(err);
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Publier';
+            submitBtn.insertAdjacentHTML('afterend',
+              '<p class="review-error-msg">Erreur : ' + escapeHtml(err.message) + '</p>');
+          });
+      });
+    }
+
+    // Charger les avis
+    fetchReviews(serverId)
+      .then(function (reviews) { refreshReviewsList(reviews, section); })
+      .catch(function () {
+        const list = document.getElementById('reviews-list-inner');
+        if (list) list.innerHTML = '<p class="reviews-empty">Impossible de charger les avis.</p>';
+      });
+  }
+
+  function refreshReviewsList(reviews, section) {
+    const list = document.getElementById('reviews-list-inner');
+    if (list) list.innerHTML = buildReviewCardsHtml(reviews);
+    const avgWrap = section.querySelector('.reviews-avg-wrap');
+    if (avgWrap) avgWrap.innerHTML = buildAvgHtml(reviews);
+  }
+
   /* ── Pop-up "Rejoindre" ── */
   const serverModal = document.getElementById('server-modal');
   const modalServerName = document.getElementById('modal-server-name');
@@ -768,6 +1002,9 @@
 
     serverModal.hidden = false;
     syncModalOpenState();
+
+    // Charger les avis pour ce serveur
+    renderReviewsSection(code);
 
     const shareBtn = document.getElementById('modal-share-btn');
     if (shareBtn) {
@@ -891,7 +1128,7 @@
   }
 
   /* ── Pop-up "Liste des joueurs" ── */
-  const PLAYERS_API_URL = 'https://multicraft-player-list.creatif-france.workers.dev/';
+  const PLAYERS_API_URL = 'goozkziidiwjjabnzbej.creatif-france.workers.dev';
 
   const playersModal = document.getElementById('players-modal');
   const playersModalTitle = document.getElementById('players-modal-title');
