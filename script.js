@@ -1844,6 +1844,279 @@
     }
   });
 
+  /* ── Global Chat Widget ── */
+  (function () {
+    var chatOpen = false;
+    var chatPollingInterval = null;
+    var chatLastMessageId = null;
+    var chatMessages = [];
+
+    var chatBubble = document.getElementById('chat-bubble');
+    var chatWindow = document.getElementById('chat-window');
+    var chatCloseBtn = document.getElementById('chat-close-btn');
+    var chatMessagesEl = document.getElementById('chat-messages');
+    var chatInputArea = document.getElementById('chat-input-area');
+    var chatLoginArea = document.getElementById('chat-login-area');
+    var chatInput = document.getElementById('chat-input');
+    var chatSendBtn = document.getElementById('chat-send-btn');
+    var chatWidgetLoginBtn = document.getElementById('chat-widget-login-btn');
+    var chatBadge = document.getElementById('chat-badge');
+
+    if (!chatBubble || !chatWindow) return; // security: only on index.html
+
+    /* Helpers */
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function formatTime(isoString) {
+      var d = new Date(isoString);
+      var h = d.getHours().toString().padStart(2, '0');
+      var m = d.getMinutes().toString().padStart(2, '0');
+      return h + ':' + m;
+    }
+
+    function buildMessageHtml(msg) {
+      var isSelf = discordUser && msg.discord_user_id === discordUser.id;
+      var avatar = msg.avatar_url
+        ? '<img class="chat-msg-avatar" src="' + escapeHtml(msg.avatar_url) + '" alt="' + escapeHtml(msg.username) + '">'
+        : '<div class="chat-msg-avatar" style="background:var(--bg-card);display:flex;align-items:center;justify-content:center;font-size:0.7rem;color:var(--text-muted);">' + escapeHtml(msg.username.charAt(0).toUpperCase()) + '</div>';
+
+      return '<div class="chat-msg' + (isSelf ? ' self' : '') + '" data-msg-id="' + escapeHtml(msg.id) + '">'
+        + avatar
+        + '<div class="chat-msg-content">'
+        + '<span class="chat-msg-user">' + escapeHtml(msg.username) + '</span>'
+        + '<div class="chat-msg-bubble">' + escapeHtml(msg.message) + '</div>'
+        + '<span class="chat-msg-time">' + formatTime(msg.created_at) + '</span>'
+        + '</div>'
+        + '</div>';
+    }
+
+    function scrollToBottom() {
+      if (chatMessagesEl) {
+        chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+      }
+    }
+
+    function renderMessages(msgs, append) {
+      if (!chatMessagesEl) return;
+      if (!msgs || msgs.length === 0) {
+        if (!append) {
+          chatMessagesEl.innerHTML = '<p class="chat-empty">Aucun message pour le moment. Soyez le premier !</p>';
+        }
+        return;
+      }
+
+      if (!append) {
+        chatMessagesEl.innerHTML = msgs.map(buildMessageHtml).join('');
+      } else {
+        msgs.forEach(function (msg) {
+          // Remove empty state if present
+          var empty = chatMessagesEl.querySelector('.chat-empty');
+          if (empty) empty.remove();
+
+          var div = document.createElement('div');
+          div.innerHTML = buildMessageHtml(msg);
+          chatMessagesEl.appendChild(div.firstChild);
+        });
+      }
+    }
+
+    /* Load messages from Supabase */
+    async function loadChatMessages(initial) {
+      if (!chatMessagesEl) return;
+      try {
+        var url = SUPABASE_URL + '/rest/v1/global_chat?select=*&order=created_at.asc&limit=50';
+        var res = await fetch(url, { headers: SUPABASE_HEADERS });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        var msgs = await res.json();
+
+        if (initial) {
+          chatMessages = msgs;
+          if (msgs.length === 0) {
+            chatMessagesEl.innerHTML = '<p class="chat-empty">Aucun message pour le moment. Soyez le premier !</p>';
+          } else {
+            renderMessages(msgs, false);
+            scrollToBottom();
+          }
+          chatLastMessageId = msgs.length ? msgs[msgs.length - 1].id : null;
+        } else {
+          // Polling: find new messages
+          if (msgs.length > 0) {
+            var lastId = chatLastMessageId;
+            var newMsgs = lastId
+              ? msgs.filter(function (m) { return m.created_at > (chatMessages.find(function (c) { return c.id === lastId; }) || {}).created_at || false; })
+              : msgs;
+
+            // Simpler approach: compare by id presence
+            var existingIds = new Set(chatMessages.map(function (m) { return m.id; }));
+            var actualNew = msgs.filter(function (m) { return !existingIds.has(m.id); });
+
+            if (actualNew.length > 0) {
+              var wasAtBottom = chatMessagesEl.scrollHeight - chatMessagesEl.scrollTop - chatMessagesEl.clientHeight < 40;
+              chatMessages = chatMessages.concat(actualNew);
+              renderMessages(actualNew, true);
+              if (wasAtBottom) scrollToBottom();
+
+              // Show badge if chat is closed
+              if (!chatOpen && chatBadge) {
+                chatBadge.removeAttribute('hidden');
+                chatBadge.textContent = '●';
+              }
+              chatLastMessageId = chatMessages[chatMessages.length - 1].id;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Chat: erreur chargement messages', err);
+        if (initial && chatMessagesEl) {
+          chatMessagesEl.innerHTML = '<p class="chat-error">Impossible de charger le chat.<br>Vérifiez que la table Supabase existe.</p>';
+        }
+      }
+    }
+
+    /* Send a message */
+    async function sendChatMessage() {
+      if (!discordUser || !chatInput) return;
+      var text = chatInput.value.trim();
+      if (!text || text.length > 500) return;
+
+      chatInput.value = '';
+      chatInput.style.height = 'auto';
+      chatSendBtn.disabled = true;
+
+      try {
+        var payload = {
+          discord_user_id: discordUser.id,
+          username: getDiscordDisplayName(discordUser).slice(0, 32),
+          avatar_url: getDiscordAvatarUrl(discordUser),
+          message: text,
+        };
+        var res = await fetch(SUPABASE_URL + '/rest/v1/global_chat', {
+          method: 'POST',
+          headers: Object.assign({}, SUPABASE_HEADERS, { 'Prefer': 'return=representation' }),
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        var created = await res.json();
+        // Append immediately without waiting for polling
+        if (created && created.length > 0) {
+          var existingIds = new Set(chatMessages.map(function (m) { return m.id; }));
+          if (!existingIds.has(created[0].id)) {
+            chatMessages.push(created[0]);
+            renderMessages([created[0]], true);
+            chatLastMessageId = created[0].id;
+            scrollToBottom();
+          }
+        }
+      } catch (err) {
+        console.error('Chat: erreur envoi', err);
+      } finally {
+        chatSendBtn.disabled = false;
+        chatInput.focus();
+      }
+    }
+
+    /* Update footer area depending on Discord login state */
+    function updateChatAuthState() {
+      if (discordUser) {
+        if (chatInputArea) chatInputArea.removeAttribute('hidden');
+        if (chatLoginArea) chatLoginArea.setAttribute('hidden', '');
+      } else {
+        if (chatInputArea) chatInputArea.setAttribute('hidden', '');
+        if (chatLoginArea) chatLoginArea.removeAttribute('hidden');
+      }
+    }
+
+    /* Open / close */
+    function openChat() {
+      chatOpen = true;
+      chatWindow.removeAttribute('hidden');
+      if (chatBadge) chatBadge.setAttribute('hidden', '');
+      updateChatAuthState();
+
+      // Initial load then start polling
+      if (chatMessages.length === 0) {
+        chatMessagesEl.innerHTML = '<p class="chat-loading">Chargement…</p>';
+        loadChatMessages(true);
+      } else {
+        scrollToBottom();
+      }
+
+      if (!chatPollingInterval) {
+        chatPollingInterval = setInterval(function () {
+          loadChatMessages(false);
+        }, 5000);
+      }
+      if (chatInput) chatInput.focus();
+    }
+
+    function closeChat() {
+      chatOpen = false;
+      chatWindow.setAttribute('hidden', '');
+      if (chatPollingInterval) {
+        clearInterval(chatPollingInterval);
+        chatPollingInterval = null;
+      }
+    }
+
+    /* Event listeners */
+    chatBubble.addEventListener('click', function () {
+      chatOpen ? closeChat() : openChat();
+    });
+
+    if (chatCloseBtn) {
+      chatCloseBtn.addEventListener('click', closeChat);
+    }
+
+    if (chatSendBtn) {
+      chatSendBtn.addEventListener('click', sendChatMessage);
+    }
+
+    if (chatInput) {
+      chatInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          sendChatMessage();
+        }
+      });
+
+      // Auto-grow textarea
+      chatInput.addEventListener('input', function () {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 80) + 'px';
+      });
+    }
+
+    if (chatWidgetLoginBtn) {
+      chatWidgetLoginBtn.addEventListener('click', function () {
+        startDiscordLogin();
+      });
+    }
+
+    // Listen for auth changes (login/logout in the header)
+    document.addEventListener('click', function (e) {
+      if (e.target.closest('#discord-login-btn') || e.target.closest('#discord-logout-btn')) {
+        // Give time for discordUser to be updated
+        setTimeout(function () {
+          updateChatAuthState();
+        }, 200);
+      }
+    });
+
+    // Also hook into OAuth callback: after auth, re-check
+    var _origUpdateDiscordUI = updateDiscordUI;
+    updateDiscordUI = function () {
+      _origUpdateDiscordUI();
+      updateChatAuthState();
+    };
+  })();
+
   /* ── Init ── */
   const footerYear = document.getElementById('footer-year');
   if (footerYear) footerYear.textContent = new Date().getFullYear();

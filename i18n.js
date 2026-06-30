@@ -127,6 +127,12 @@
       'discord.login':  'Connexion',
       'discord.user':   'Utilisateur#',
 
+      /* Chat */
+      'chat.title': 'Chat Global',
+      'chat.placeholder': 'Écrire un message...',
+      'chat.loginPrompt': 'Connectez-vous avec Discord pour discuter.',
+      'chat.send': 'Envoyer',
+
       /* Meta */
       'meta.description': 'MultiCraft Info — Actualités, mises à jour et informations sur les serveurs MultiCraft.',
     },
@@ -251,6 +257,12 @@
       /* Discord */
       'discord.login':  'Log in',
       'discord.user':   'User#',
+
+      /* Chat */
+      'chat.title': 'Global Chat',
+      'chat.placeholder': 'Type a message...',
+      'chat.loginPrompt': 'Log in with Discord to chat.',
+      'chat.send': 'Send',
 
       /* Meta */
       'meta.description': 'MultiCraft Info — News, updates and information about MultiCraft servers.',
