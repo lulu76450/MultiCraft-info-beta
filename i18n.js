@@ -13,6 +13,7 @@
       'nav.servers':  'Serveurs',
       'nav.gameInfo': 'Info du jeu',
       'nav.siteInfo': 'Info du site',
+      'nav.download': 'Télécharger',
 
       /* Home */
       'home.title':    'Bienvenue sur <span class="gradient-text">MultiCraft Info</span>',
@@ -67,6 +68,18 @@
       'siteInfo.createdBy':    'Ce site web a été créé par <a href="https://github.com/NattMath22">Aurelmattnath</a> et <a href="https://github.com/lulu76450">Lucas76</a>.',
       'siteInfo.source':       'Le code source du site est disponible <a href="https://github.com/NattMath22/multicraft-info">ici</a>.',
       'siteInfo.notAffiliated':'Nous ne sommes pas affiliés à MultiCraft',
+
+      /* Download page */
+      'download.subtitle':     'Téléchargez MultiCraft pour Android ou Windows et choisissez la version de votre choix.',
+      'download.androidTitle': 'Android',
+      'download.androidDesc':  'Fichier APK à installer sur votre appareil Android.',
+      'download.windowsTitle': 'Windows',
+      'download.windowsDesc':  'Installateur à exécuter sur votre PC Windows.',
+      'download.chooseVersion':'Choisir la version',
+      'download.btnAndroid':   'Télécharger pour Android',
+      'download.btnWindows':   'Télécharger pour Windows',
+      'download.latest':       '(dernière version)',
+      'download.error':        'Impossible de charger les versions disponibles.',
 
       /* Footer */
       'footer.legal': 'Légal',
@@ -125,6 +138,7 @@
       'nav.servers':  'Servers',
       'nav.gameInfo': 'Game Info',
       'nav.siteInfo': 'Site Info',
+      'nav.download': 'Download',
 
       /* Home */
       'home.title':    'Welcome to <span class="gradient-text">MultiCraft Info</span>',
@@ -179,6 +193,18 @@
       'siteInfo.createdBy':    'This website was created by <a href="https://github.com/NattMath22">Aurelmattnath</a> and <a href="https://github.com/lulu76450">Lucas76</a>.',
       'siteInfo.source':       'The site\'s source code is available <a href="https://github.com/NattMath22/multicraft-info">here</a>.',
       'siteInfo.notAffiliated':'We are not affiliated with MultiCraft',
+
+      /* Download page */
+      'download.subtitle':     'Download MultiCraft for Android or Windows and pick the version you want.',
+      'download.androidTitle': 'Android',
+      'download.androidDesc':  'APK file to install on your Android device.',
+      'download.windowsTitle': 'Windows',
+      'download.windowsDesc':  'Installer to run on your Windows PC.',
+      'download.chooseVersion':'Choose version',
+      'download.btnAndroid':   'Download for Android',
+      'download.btnWindows':   'Download for Windows',
+      'download.latest':       '(latest version)',
+      'download.error':        'Could not load the available versions.',
 
       /* Footer */
       'footer.legal': 'Legal',
