@@ -251,6 +251,7 @@
     serveurs: document.getElementById('page-serveurs'),
     'info-du-jeu': document.getElementById('page-info-du-jeu'),
     'info-du-site': document.getElementById('page-info-du-site'),
+    telecharger: document.getElementById('page-telecharger'),
   };
 
   const navLinks = document.querySelectorAll('[data-nav]');
@@ -282,6 +283,7 @@
     if (pageId === 'mises-a-jour' && !updatesLoaded) loadUpdates();
     if (pageId === 'info-du-jeu' && !datacentersLoaded) renderDatacenters();
     if (pageId === 'serveurs' && !serversLoaded) loadServers();
+    if (pageId === 'telecharger' && !downloadsLoaded) loadDownloads();
 
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -622,6 +624,59 @@
     }
     dcContainer.innerHTML = html;
     datacentersLoaded = true;
+  }
+
+  /* ── Téléchargements ── */
+  let downloadsLoaded = false;
+  let downloadsData = null;
+  const androidSelect = document.getElementById('android-version-select');
+  const windowsSelect = document.getElementById('windows-version-select');
+  const androidBtn = document.getElementById('android-download-btn');
+  const windowsBtn = document.getElementById('windows-download-btn');
+
+  function sortVersionsDesc(list) {
+    return list.slice().sort(function (a, b) {
+      return String(b.version).localeCompare(String(a.version), undefined, { numeric: true, sensitivity: 'base' });
+    });
+  }
+
+  function populateVersionSelect(selectEl, btnEl, versions) {
+    if (!selectEl || !btnEl) return;
+    const sorted = sortVersionsDesc(versions);
+    let html = '';
+    for (let i = 0; i < sorted.length; i++) {
+      const v = sorted[i];
+      const label = v.version + (v.build ? ' (build ' + v.build + ')' : '') +
+        (v.latest ? ' ' + window.i18n.t('download.latest') : '');
+      html += '<option value="' + escapeHtml(v.url) + '">' + escapeHtml(label) + '</option>';
+    }
+    selectEl.innerHTML = html;
+
+    function updateBtn() {
+      btnEl.href = selectEl.value;
+    }
+    updateBtn();
+    selectEl.addEventListener('change', updateBtn);
+  }
+
+  function loadDownloads() {
+    if (!androidSelect && !windowsSelect) return;
+    fetch('downloads.json')
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        downloadsData = data;
+        populateVersionSelect(androidSelect, androidBtn, data.android || []);
+        populateVersionSelect(windowsSelect, windowsBtn, data.windows || []);
+        downloadsLoaded = true;
+      })
+      .catch(function (err) {
+        console.error('Erreur de chargement des téléchargements:', err);
+        if (androidSelect) androidSelect.innerHTML = '<option>' + escapeHtml(window.i18n.t('download.error')) + '</option>';
+        if (windowsSelect) windowsSelect.innerHTML = '<option>' + escapeHtml(window.i18n.t('download.error')) + '</option>';
+      });
   }
 
   /* ── Serveurs (API live) ── */
@@ -1765,6 +1820,11 @@
     if (dcPage && dcPage.classList.contains('active')) {
       renderDatacenters();
     }
+    // Re-render downloads labels if loaded
+    if (downloadsLoaded && downloadsData) {
+      populateVersionSelect(androidSelect, androidBtn, downloadsData.android || []);
+      populateVersionSelect(windowsSelect, windowsBtn, downloadsData.windows || []);
+    }
     // Update copy button text if modal open
     var modalCopyBtn = document.getElementById('modal-copy-btn');
     if (modalCopyBtn && !modalCopyBtn._copied) {
@@ -1782,6 +1842,7 @@
   if (location.hash === '#mises-a-jour') loadUpdates();
   if (location.hash === '#info-du-jeu') renderDatacenters();
   if (location.hash === '#serveurs') loadServers();
+  if (location.hash === '#telecharger') loadDownloads();
 
   // Vérifier aussi si on arrive avec un paramètre server dans l'URL
   // (même si on est sur une autre page, on va charger les serveurs et ouvrir le modal)
