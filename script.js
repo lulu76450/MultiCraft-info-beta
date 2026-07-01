@@ -48,6 +48,15 @@
   let chatPollingInterval = null;
   let isPolling = false;
 
+  /* ── Suivi des messages non lus (point vert du bouton Chat) ── */
+  let lastSeenChatTimestamp = localStorage.getItem('mc_chat_last_seen');
+  if (!lastSeenChatTimestamp) {
+    // Première visite : on considère l'historique existant comme déjà vu
+    lastSeenChatTimestamp = new Date().toISOString();
+    localStorage.setItem('mc_chat_last_seen', lastSeenChatTimestamp);
+  }
+  let unreadCheckInterval = null;
+
   function getDiscordAvatarUrl(user) {
     if (!user) return '';
     if (user.avatar) return 'https://cdn.discordapp.com/avatars/' + user.id + '/' + user.avatar + '.png?size=64';
@@ -380,10 +389,11 @@
     accueil: document.getElementById('page-accueil'),
     'mises-a-jour': document.getElementById('page-mises-a-jour'),
     serveurs: document.getElementById('page-serveurs'),
-    'info-du-jeu': document.getElementById('page-info-du-jeu'),
+    'le-jeu': document.getElementById('page-le-jeu'),
     'info-du-site': document.getElementById('page-info-du-site'),
-    telecharger: document.getElementById('page-telecharger'),
   };
+  // Anciennes ancres conservées pour compatibilité (liens/marque-pages existants)
+  const legacyPageRedirects = { 'info-du-jeu': 'le-jeu', telecharger: 'le-jeu' };
 
   const navLinks = document.querySelectorAll('[data-nav]');
   const navToggle = document.querySelector('.nav-toggle');
@@ -400,15 +410,16 @@
     if (mainNav) mainNav.classList.remove('open');
     if (navToggle) { navToggle.classList.remove('open'); navToggle.setAttribute('aria-expanded', 'false'); }
     if (pageId === 'mises-a-jour' && !updatesLoaded) loadUpdates();
-    if (pageId === 'info-du-jeu' && !datacentersLoaded) renderDatacenters();
+    if (pageId === 'le-jeu' && !datacentersLoaded) renderDatacenters();
     if (pageId === 'serveurs' && !serversLoaded) loadServers();
-    if (pageId === 'telecharger' && !downloadsLoaded) loadDownloads();
+    if (pageId === 'le-jeu' && !downloadsLoaded) loadDownloads();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function handleRoute() {
     const hash = location.hash.slice(1) || 'accueil';
-    if (pages[hash]) navigateTo(hash);
+    const target = legacyPageRedirects[hash] || hash;
+    if (pages[target]) navigateTo(target);
     else navigateTo('accueil');
   }
 
@@ -1150,7 +1161,7 @@
   document.addEventListener('keydown', function (e) { if (e.key !== 'Escape') return; if (playersModal && !playersModal.hidden) { closePlayersModal(); return; } if (serverModal && !serverModal.hidden) closeServerModal(); });
 
   /* ── Language change ── */
-  document.addEventListener('langchange', function () { if (serversLoaded) renderServers(); if (updatesLoaded && updatesContainer) { updatesLoaded = false; serversLoaded = false; loadUpdates(); loadServers(); } var dcPage = document.getElementById('page-info-du-jeu'); if (dcPage && dcPage.classList.contains('active')) renderDatacenters(); if (downloadsLoaded && downloadsData) { populateVersionSelect(androidSelect, androidBtn, downloadsData.android || []); populateVersionSelect(windowsSelect, windowsBtn, downloadsData.windows || []); } var modalCopyBtn = document.getElementById('modal-copy-btn'); if (modalCopyBtn && !modalCopyBtn._copied) modalCopyBtn.textContent = window.i18n.t('modal.copy'); });
+  document.addEventListener('langchange', function () { if (serversLoaded) renderServers(); if (updatesLoaded && updatesContainer) { updatesLoaded = false; serversLoaded = false; loadUpdates(); loadServers(); } var dcPage = document.getElementById('page-le-jeu'); if (dcPage && dcPage.classList.contains('active')) renderDatacenters(); if (downloadsLoaded && downloadsData) { populateVersionSelect(androidSelect, androidBtn, downloadsData.android || []); populateVersionSelect(windowsSelect, windowsBtn, downloadsData.windows || []); } var modalCopyBtn = document.getElementById('modal-copy-btn'); if (modalCopyBtn && !modalCopyBtn._copied) modalCopyBtn.textContent = window.i18n.t('modal.copy'); });
 
   /* ── Son ── */
   document.addEventListener('click', function (e) { const target = e.target.closest('a, button, [role="button"]'); if (target) { const audio = new Audio('btn_press.ogg'); audio.play().catch(function (err) { console.warn('Impossible de jouer le son :', err); }); } });
@@ -1216,7 +1227,13 @@
       return;
     }
 
-    chatMessagesEl.innerHTML = '<p class="chat-loading">Chargement…</p>';
+    // On n'affiche l'état "Chargement…" que si aucun message n'est déjà affiché,
+    // afin d'éviter que la liste ne clignote (disparaisse puis réapparaisse)
+    // lors des rafraîchissements automatiques ou manuels.
+    var hasVisibleMessages = !!chatMessagesEl.querySelector('.chat-msg');
+    if (!hasVisibleMessages) {
+      chatMessagesEl.innerHTML = '<p class="chat-loading">Chargement…</p>';
+    }
 
     try {
       var url;
@@ -1248,9 +1265,17 @@
         renderMessagesForTab(msgs, tab);
         scrollToBottom();
       }
+
+      // La fenêtre de chat est ouverte : l'utilisateur voit les messages,
+      // on met donc à jour le repère "dernier message vu".
+      if (chatOpen) {
+        markChatAsSeen();
+      }
     } catch (err) {
       console.error('Erreur chargement messages:', err);
-      chatMessagesEl.innerHTML = '<p class="chat-error">Impossible de charger les messages.</p>';
+      if (!hasVisibleMessages) {
+        chatMessagesEl.innerHTML = '<p class="chat-error">Impossible de charger les messages.</p>';
+      }
     }
   }
 
@@ -1905,9 +1930,9 @@
   handleRoute();
 
   if (location.hash === '#mises-a-jour') loadUpdates();
-  if (location.hash === '#info-du-jeu') renderDatacenters();
+  if (location.hash === '#le-jeu' || location.hash === '#info-du-jeu') renderDatacenters();
   if (location.hash === '#serveurs') loadServers();
-  if (location.hash === '#telecharger') loadDownloads();
+  if (location.hash === '#le-jeu' || location.hash === '#telecharger') loadDownloads();
 
   const urlParams = new URLSearchParams(window.location.search);
   const hashParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
