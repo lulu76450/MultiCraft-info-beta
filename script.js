@@ -1738,6 +1738,13 @@
     }
   }
 
+  function markChatAsSeen() {
+    lastSeenChatTimestamp = new Date().toISOString();
+    localStorage.setItem('mc_chat_last_seen', lastSeenChatTimestamp);
+    var chatBadge = document.getElementById('chat-badge');
+    if (chatBadge) chatBadge.setAttribute('hidden', '');
+  }
+
   function openChat() {
     chatOpen = true;
     var chatWindow = document.getElementById('chat-window');
