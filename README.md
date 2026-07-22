@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-<a href="https://multicraft-info.netlify.app/">Site web</a>
+<a href="https://multicraft-info.netlify.app/">Website</a>
 </p>
  
 Developed with HTML/CSS/JS
@@ -16,6 +16,7 @@ Developed with HTML/CSS/JS
 * Displays the list of game servers <br>
 * Displays the list of updates <br>
 * Allows users to put reviews for servers <br>
+* Chat with others user <br>
 And other great features coming soon! <br>
 </p>
 
@@ -26,4 +27,4 @@ License for text and pictures in "updates" directory : CC-BY-NC 4.0 <br>
 License of MultiCraft Font : CC-BY-SA 3.0 (Copyright MultiCraft Studio OÜ)
 </p>
 
-### (C) MultiCraft Info Team
+### (C) Deblock Studios 2026
