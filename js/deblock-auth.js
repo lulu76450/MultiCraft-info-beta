@@ -21,8 +21,8 @@
   'use strict';
 
   /* ── Supabase credentials (anon key only, never service_role) ── */
-  var SUPABASE_URL = 'https://qxzvnxekjggjldezprec.supabase.co';
-  var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF4enZueGVramdnamxkZXpwcmVjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyMzE3NjMsImV4cCI6MjA5NzgwNzc2M30.Qa-lxT8mYy2kejt2kiydOvDqCYNeAD6q1d1Ce56A5Rc';
+  var SUPABASE_URL = 'https://rdtvftclctwfqtpkbzlf.supabase.co';
+  var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJkdHZmdGNsY3R3ZnF0cGtiemxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ3MTc0MjksImV4cCI6MjEwMDI5MzQyOX0.DIsdZkJaoziW2OI2hbDalDl0IQCGPF3QRcBhKT7GW7o';
 
   /* ── Internal state ── */
   var supabase = null;
